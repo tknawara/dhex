@@ -5,6 +5,8 @@ void render(string filename) {
     import std.stdio;
     import terminal;
     import hexreader;
+    import std.string : strip;
+    import std.conv : to;
 
     File f;
     try {
@@ -20,7 +22,7 @@ void render(string filename) {
     bool running = true;
     int rowsPerPage = 20;
 
-    auto term = RawTerm(0);
+    RawTerm* term = new RawTerm(0);
 
     // Hide Cursor (ANSI Code)
     write("\033[?25l");
@@ -30,7 +32,7 @@ void render(string filename) {
         write("\033[2J\033[H");
 
         writeln("D-HEX VIEW :: ", filename);
-        writeln("Controls: [w/Up] up, [s/Down] Down, [q] Quit");
+        writeln("Controls: [w/Up] up, [s/Down] Down, [g] Jump, [q] Quit");
         writeln("----------------------------------------------");
 
         f.seek(currentOffset);
@@ -54,6 +56,28 @@ void render(string filename) {
         char input = getChar();
         if (input == 'q') {
             running = false;
+        }
+        else if (input == 'g') {
+            destroy(*term);
+            write("\033[?25h"); // Show cursor
+            write("\n\033[33mGo to Offset (Hex): 0x\033[0m");
+            string line = readln().strip();
+            // 3. Parse Input
+            try {
+                if (line.length > 0) {
+                    long target = to!long(line, 16);
+                    target = (target / 16) * 16;
+                    if (target >= 0 && target < fileSize) {
+                        currentOffset = target;
+                    }
+                }
+            }
+            catch (Exception e) {
+            }
+
+            // 4. Re-enable Raw Mode
+            term = new RawTerm(0);
+            write("\033[?25l"); // Hide cursor again
         }
         // Handle arrow keys
         // Esc (27) followed by '[' follwed by ('A' | 'B')
@@ -83,4 +107,7 @@ void render(string filename) {
             }
         }
     }
+    // Cleanup final state
+    destroy(*term);
+    write("\033[?25h");
 }
