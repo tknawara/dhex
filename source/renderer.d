@@ -1,13 +1,13 @@
 module renderer;
 
-void render(string filename) {
-    import std.file;
-    import std.stdio;
-    import terminal;
-    import hexreader;
-    import std.string : strip;
-    import std.conv : to;
+import std.file;
+import std.stdio;
+import terminal;
+import hexreader;
+import std.string : strip;
+import std.conv : to;
 
+void render(string filename) {
     File f;
     try {
         f = File(filename, "rb");
@@ -23,96 +23,119 @@ void render(string filename) {
     int rowsPerPage = 20;
 
     RawTerm* term = new RawTerm(0);
-
-    // Hide Cursor (ANSI Code)
-    write("\033[?25l");
+    write("\033[?25l"); // Hide Cursor
 
     while (running) {
-        // 1. CLEAR SCREEN (ANSI Code: \033[2J clears, \033[H moves home)
-        write("\033[2J\033[H");
-
-        writeln("D-HEX VIEW :: ", filename);
-        writeln("Controls: [w/Up] up, [s/Down] Down, [g] Jump, [q] Quit");
-        writeln("----------------------------------------------");
-
-        f.seek(currentOffset);
-
-        foreach (i; 0 .. rowsPerPage) {
-            ubyte[16] buffer;
-            ubyte[] chunk = f.rawRead(buffer);
-
-            long lineOffset = currentOffset + (i * 16);
-            if (chunk.length > 0) {
-                printHexLine(chunk, lineOffset);
-            }
-            else {
-                writeln("~");
-            }
-
-            if (f.eof)
-                break;
-        }
+        renderScreen(f, filename, currentOffset, rowsPerPage);
 
         char input = getChar();
-        // FIX: Stop if we hit EOF or Read Error to prevent infinite loops
-        if (input == 0) {
+
+        if (input == 0)
+            break;
+
+        switch (input) {
+        case 'q':
             running = false;
             break;
-        }
-        else if (input == 'q') {
-            running = false;
-        }
-        else if (input == 'g') {
+
+        case 'g':
             destroy(*term);
             write("\033[?25h"); // Show cursor
-            write("\n\033[33mGo to Offset (Hex): 0x\033[0m");
-            string line = readln().strip();
-            // 3. Parse Input
-            try {
-                if (line.length > 0) {
-                    long target = to!long(line, 16);
-                    target = (target / 16) * 16;
-                    if (target >= 0 && target < fileSize) {
-                        currentOffset = target;
-                    }
-                }
-            }
-            catch (Exception e) {
-            }
 
-            // 4. Re-enable Raw Mode
+            currentOffset = promptForJump(currentOffset, fileSize);
+
             term = new RawTerm(0);
-            write("\033[?25l"); // Hide cursor again
-        }
-        // Handle arrow keys
-        // Esc (27) followed by '[' follwed by ('A' | 'B')
-        else if (input == 27) {
-            char c2 = getChar();
-            if (c2 == '[') {
-                char c3 = getChar();
-                if (c3 == 'A') {
-                    if (currentOffset >= 16)
-                        currentOffset -= 16;
-                }
-                else if (c3 == 'B') {
-                    if (currentOffset + (rowsPerPage * 16) < fileSize) {
-                        currentOffset += 16;
-                    }
-                }
-            }
-        }
-        else if (input == 's') {
-            if (currentOffset + (rowsPerPage * 16) < fileSize) {
-                currentOffset += 16;
-            }
-        }
-        else if (input == 'w') {
-            if (currentOffset >= 16) {
+            write("\033[?25l"); // Hide cursor
+            break;
+
+        case 'w':
+            if (currentOffset >= 16)
                 currentOffset -= 16;
-            }
+            break;
+
+        case 's':
+            if (currentOffset + (rowsPerPage * 16) < fileSize)
+                currentOffset += 16;
+            break;
+
+        case 27: // Arrows (ESC sequence)
+            handleArrows(currentOffset, fileSize, rowsPerPage);
+            break;
+
+        default:
+            break;
         }
     }
-    // Cleanup final state
+
+    // Cleanup
     destroy(*term);
     write("\033[?25h");
+}
+
+private void renderScreen(File f, string filename, long currentOffset, int rowsPerPage) {
+    // Clear Screen (2J) and Move Home (H)
+    write("\033[2J\033[H");
+
+    // Header
+    writeln("D-HEX VIEW :: ", filename);
+    writeln("Controls: [w/Up] Scroll Up, [s/Down] Scroll Down, [g] Jump, [q] Quit");
+    writefln("Offset: 0x%08X", currentOffset);
+    writeln("---------------------------------------------------------------------");
+
+    // Content
+    f.seek(currentOffset);
+    foreach (i; 0 .. rowsPerPage) {
+        ubyte[16] buffer;
+        ubyte[] chunk = f.rawRead(buffer);
+
+        long lineOffset = currentOffset + (i * 16);
+
+        if (chunk.length > 0) {
+            hexreader.printHexLine(chunk, lineOffset);
+        }
+        else {
+            writeln("~"); // Visual padding for end of file
+        }
+
+        // Stop if we hit EOF mid-page
+        if (f.eof)
+            break;
+    }
+}
+
+private long promptForJump(long currentOffset, long fileSize) {
+    write("\n\033[33mGo to Offset (Hex): 0x\033[0m");
+
+    string line = readln().strip();
+
+    if (line.length == 0)
+        return currentOffset; // Cancelled
+
+    try {
+        long target = to!long(line, 16);
+        target = (target / 16) * 16;
+        if (target >= 0 && target < fileSize) {
+            return target;
+        }
+    }
+    catch (Exception e) {
+    }
+
+    return currentOffset;
+}
+
+// Pass currentOffset by 'ref' so we can modify it directly
+void handleArrows(ref long currentOffset, long fileSize, int rowsPerPage) {
+    char c2 = getChar();
+    if (c2 == '[') {
+        char c3 = getChar();
+        if (c3 == 'A') { // Up
+            if (currentOffset >= 16)
+                currentOffset -= 16;
+        }
+        else if (c3 == 'B') { // Down
+            if (currentOffset + (rowsPerPage * 16) < fileSize)
+                currentOffset += 16;
+        }
+    }
 }
