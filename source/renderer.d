@@ -54,7 +54,12 @@ void render(string filename) {
         }
 
         char input = getChar();
-        if (input == 'q') {
+        // FIX: Stop if we hit EOF or Read Error to prevent infinite loops
+        if (input == 0) {
+            running = false;
+            break;
+        }
+        else if (input == 'q') {
             running = false;
         }
         else if (input == 'g') {
