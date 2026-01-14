@@ -72,7 +72,9 @@ void render(string filename) {
     write("\033[?25h");
 }
 
-private void renderScreen(File f, string filename, long currentOffset, int rowsPerPage) {
+private:
+
+void renderScreen(File f, string filename, long currentOffset, int rowsPerPage) {
     // Clear Screen (2J) and Move Home (H)
     write("\033[2J\033[H");
 
@@ -103,11 +105,9 @@ private void renderScreen(File f, string filename, long currentOffset, int rowsP
     }
 }
 
-private long promptForJump(long currentOffset, long fileSize) {
+long promptForJump(long currentOffset, long fileSize) {
     write("\n\033[33mGo to Offset (Hex): 0x\033[0m");
-
     string line = readln().strip();
-
     if (line.length == 0)
         return currentOffset; // Cancelled
 
@@ -124,7 +124,6 @@ private long promptForJump(long currentOffset, long fileSize) {
     return currentOffset;
 }
 
-// Pass currentOffset by 'ref' so we can modify it directly
 void handleArrows(ref long currentOffset, long fileSize, int rowsPerPage) {
     char c2 = getChar();
     if (c2 == '[') {
