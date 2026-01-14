@@ -1,0 +1,9 @@
+{
+	"authors": [
+		"tarek"
+	],
+	"copyright": "Copyright © 2026, tarek",
+	"description": "A minimal D application.",
+	"license": "proprietary",
+	"name": "dhex"
+}
